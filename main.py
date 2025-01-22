@@ -32,36 +32,36 @@ class IslamicChatbot:
         self.conversation_history = []
         self.max_history = 5  # Keep last 5 exchanges
         
-        # Update prompt template to emphasize hadith grades
+        # Update prompt template to require full citations
         self.prompt_template = """You are a knowledgeable Islamic chatbot that provides accurate information from both the Quran and Hadith. 
-
-        Previous conversation:
-        {chat_history}
 
         Guidelines:
         1. Use ONLY the provided context to answer questions
         2. For Quranic verses:
-           - Include both Arabic and English translations
-           - Cite as (Quran Surah:Ayah)
+           - ALWAYS include the complete verse text in both Arabic and English
+           - Format Quranic citations as:
+             Quran (Surah:Ayah)
+             Arabic: [Arabic text]
+             English: [English text]
         3. For Hadiths:
-           - ALWAYS start hadith citations with its grade in brackets [e.g., (Grade: Sahih)]
-           - Include both Arabic and English translations
-           - Cite as (Grade: [grade], Collection Name, Hadith Number)
-           - Only use hadiths graded as Sahih (authentic) or Hasan (good)
-           - If hadith grade is unclear or weak, mention this and prefer other references
-        4. For general questions:
-           - Prioritize Sahih (authentic) hadiths when multiple are available
-           - Provide evidence from both Quran and Hadith when available
-        5. If asked for "more references":
-           - Look at the previous conversation to identify the topic
-           - Provide different references than previously shown
-        6. Be respectful and maintain Islamic etiquette in responses
-        7. For verses mentioning Allah, add "Subhanahu wa Ta'ala (Glory be to Him)"
-        8. For mentions of Prophet Muhammad, add "ﷺ (peace be upon him)"
+           - ALWAYS include the complete hadith text in both Arabic and English
+           - Format Hadith citations as:
+             [Collection Name, Book/Volume Number, Hadith Number]
+             Grade: [Sahih/Hasan]
+             Narrator: [Narrator name]
+             Arabic: [Arabic text]
+             English: [English text]
+        4. For every answer:
+           - Start with a brief explanation
+           - Then provide relevant Quran verses with full text
+           - Follow with relevant Hadiths with full text
+           - Ensure all citations include complete text, not just references
+        5. Be respectful and maintain Islamic etiquette in responses
+        6. For verses mentioning Allah, add "Subhanahu wa Ta'ala (Glory be to Him)"
+        7. For mentions of Prophet Muhammad, add "ﷺ (peace be upon him)"
 
         Context: {context}
-        
-        Current Question: {question}
+        Question: {question}
         
         Answer: """
         
@@ -210,77 +210,88 @@ class IslamicChatbot:
                 print("Error: HADITH_API_KEY not found in environment variables")
                 return
             
+            # Add this debug line at the start of hadith fetching
+            print(f"Using API key: {hadith_api_key[:10]}...")  # Only print first 10 chars for security
+            
             # Using correct book slugs from API documentation
             collections = ['sahih-bukhari', 'sahih-muslim']
             for collection in collections:
                 print(f"\nFetching complete {collection} collection...")
                 
+                # Update the API request
+                url = "https://www.hadithapi.com/api/hadiths"
                 params = {
                     'apiKey': hadith_api_key,
-                    'bookSlug': collection,  # Changed to bookSlug based on API response
-                    'status': 'sahih,hasan'  # Only fetch authentic hadiths
+                    'book': collection,  # Changed back to 'book' instead of 'bookSlug'
+                    'status': 'sahih'  # Simplified to just sahih for testing
                 }
                 
+                # Add API key to URL as well (some APIs require both)
+                if '?' not in url:
+                    url = f"{url}?apiKey={hadith_api_key}"
+                
                 response = requests.get(
-                    "https://www.hadithapi.com/api/hadiths",
+                    url,
                     params=params,
-                    timeout=10
+                    timeout=10,
+                    headers={
+                        'Accept': 'application/json',
+                        'Content-Type': 'application/json'
+                    }
                 )
                 
                 if response.status_code == 200:
                     try:
                         data = response.json()
-                        if isinstance(data, str):
-                            data = json.loads(data)
                         
-                        # Debug the parsed data structure
-                        print("Data keys:", data.keys() if isinstance(data, dict) else "Not a dict")
-                        
-                        # Get hadiths from the response
-                        hadiths = data.get('data', [])  # The hadiths are in the 'data' field
+                        # Get hadiths from the nested structure
+                        hadiths_data = data.get('hadiths', {})
+                        hadiths = hadiths_data.get('data', [])
+                        current_page = hadiths_data.get('current_page', 1)
                         
                         if not hadiths:
                             print(f"No hadiths found for {collection}")
                             continue
                         
-                        for hadith in hadiths:
-                            # Extract all relevant details from the hadith
-                            hadith_number = hadith.get('hadithNumber', 'N/A')
-                            volume = hadith.get('volume', 'N/A')
-                            status = hadith.get('status', '').lower()
-                            
-                            # Get chapter information
-                            chapter = hadith.get('chapter', {})
-                            chapter_number = chapter.get('chapterNumber', 'N/A')
-                            chapter_english = chapter.get('chapterEnglish', 'N/A')
-                            chapter_arabic = chapter.get('chapterArabic', 'N/A')
-                            
-                            # Get narration details
-                            english_narrator = hadith.get('englishNarrator', '')
-                            arabic = hadith.get('hadithArabic', '')
-                            english = hadith.get('hadithEnglish', '')
-                            
-                            # Get heading information
-                            heading_english = hadith.get('headingEnglish', '')
-                            heading_arabic = hadith.get('headingArabic', '')
-                            
-                            # Format the hadith text with all available information
-                            text = (
-                                f"Hadith: {collection}\n"
-                                f"Grade: {status.upper()}\n"
-                                f"Book: Volume {volume}, Number {hadith_number}\n"
-                                f"Chapter: {chapter_number} - {chapter_english}\n"
-                                f"Chapter (Arabic): {chapter_arabic}\n"
-                                f"Heading: {heading_english}\n"
-                                f"Heading (Arabic): {heading_arabic}\n"
-                                f"Narrator: {english_narrator}\n"
-                                f"Arabic: {arabic}\n"
-                                f"English: {english}"
-                            )
-                            documents.append(text)
-                            print(f"Added {collection} hadith #{hadith_number}")
+                        print(f"Found {len(hadiths)} hadiths on page {current_page}")
                         
-                        print(f"Completed {collection}: {len(hadiths)} hadiths fetched")
+                        for hadith in hadiths:
+                            try:
+                                # Extract book information
+                                book_info = hadith.get('book', {})
+                                book_name = book_info.get('bookName', collection)
+                                writer_name = book_info.get('writerName', 'N/A')
+                                
+                                # Extract chapter information
+                                chapter_info = hadith.get('chapter', {})
+                                chapter_number = chapter_info.get('chapterNumber', 'N/A')
+                                chapter_english = chapter_info.get('chapterEnglish', 'N/A')
+                                chapter_arabic = chapter_info.get('chapterArabic', 'N/A')
+                                
+                                # Extract hadith details
+                                text = (
+                                    f"Hadith: {book_name}\n"
+                                    f"Writer: {writer_name}\n"
+                                    f"Grade: {hadith.get('status', 'N/A')}\n"
+                                    f"Volume: {hadith.get('volume', 'N/A')}\n"
+                                    f"Number: {hadith.get('hadithNumber', 'N/A')}\n"
+                                    f"Chapter: {chapter_number} - {chapter_english}\n"
+                                    f"Chapter (Arabic): {chapter_arabic}\n"
+                                    f"Heading: {hadith.get('headingEnglish', '')}\n"
+                                    f"Heading (Arabic): {hadith.get('headingArabic', '')}\n"
+                                    f"Narrator: {hadith.get('englishNarrator', '')}\n"
+                                    f"Arabic: {hadith.get('hadithArabic', '')}\n"
+                                    f"English: {hadith.get('hadithEnglish', '')}\n"
+                                    f"Reference: {book_name} Volume {hadith.get('volume', 'N/A')}, Hadith {hadith.get('hadithNumber', 'N/A')}"
+                                )
+                                documents.append(text)
+                                print(f"Added {book_name} hadith #{hadith.get('hadithNumber', 'N/A')}")
+                            
+                            except Exception as e:
+                                print(f"Error processing hadith: {str(e)}")
+                                continue
+                        
+                        print(f"Completed page {current_page} of {collection}: {len(hadiths)} hadiths fetched")
                     
                     except json.JSONDecodeError as e:
                         print(f"Error decoding JSON: {e}")
@@ -326,7 +337,7 @@ class IslamicChatbot:
         """Initialize the QA chain with custom prompt"""
         prompt = PromptTemplate(
             template=self.prompt_template,
-            input_variables=["context", "question", "chat_history"]
+            input_variables=["context", "question"]  # Removed chat_history
         )
         
         # Initialize ChatOpenAI with GPT-3.5-turbo
@@ -335,7 +346,7 @@ class IslamicChatbot:
             model_name="gpt-3.5-turbo"
         )
         
-        # Create the QA chain
+        # Create the QA chain with simplified configuration
         self.qa_chain = RetrievalQA.from_chain_type(
             llm=llm,
             chain_type="stuff",
@@ -344,7 +355,7 @@ class IslamicChatbot:
             ),
             chain_type_kwargs={
                 "prompt": prompt
-            }  # Removed memory_key
+            }
         )
         
     def answer_question(self, question: str) -> Dict[str, str]:
@@ -363,31 +374,23 @@ class IslamicChatbot:
                     "status": "error"
                 }
             
-            # Format conversation history
-            chat_history = "\n".join([
-                f"Q: {q}\nA: {a}" for q, a in self.conversation_history
-            ])
-            
-            # Run the query with conversation history
-            response = self.qa_chain.run({
-                "question": question,
-                "chat_history": chat_history
+            # Run the query with simplified input format
+            response = self.qa_chain.invoke({
+                "query": question
             })
             
+            # Extract the answer from the response
+            answer = response['result'] if isinstance(response, dict) else str(response)
+            
             # Basic response validation
-            if not response or len(response.strip()) < 10:
+            if not answer or len(answer.strip()) < 10:
                 return {
                     "error": "Generated response was invalid or too short.",
                     "status": "error"
                 }
             
-            # Update conversation history
-            self.conversation_history.append((question, response))
-            if len(self.conversation_history) > self.max_history:
-                self.conversation_history.pop(0)  # Remove oldest exchange
-            
             return {
-                "answer": response,
+                "answer": answer,
                 "status": "success"
             }
             
