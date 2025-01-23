@@ -1,19 +1,21 @@
 import os
 from typing import List, Dict, Optional
-from langchain.embeddings import OpenAIEmbeddings
-from langchain.vectorstores import Chroma
+from langchain_community.embeddings import OpenAIEmbeddings
+from langchain_community.vectorstores import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.chat_models import ChatOpenAI
+from langchain_openai import ChatOpenAI
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 import json
 from dotenv import load_dotenv
 import requests
 import time
-from langchain_openai import ChatOpenAI
 
 # Load environment variables
 load_dotenv()
+
+print(f"OpenAI API Key loaded: {os.getenv('OPENAI_API_KEY')[:10]}...")  # Only print first 10 chars for security
+print(f"Hadith API Key loaded: {os.getenv('HADITH_API_KEY')[:10]}...")
 
 class IslamicChatbot:
     def __init__(self):
@@ -337,7 +339,7 @@ class IslamicChatbot:
         """Initialize the QA chain with custom prompt"""
         prompt = PromptTemplate(
             template=self.prompt_template,
-            input_variables=["context", "question"]  # Removed chat_history
+            input_variables=["context", "question"]
         )
         
         # Initialize ChatOpenAI with GPT-3.5-turbo
