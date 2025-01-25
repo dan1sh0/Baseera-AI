@@ -24,7 +24,7 @@ print(f"Hadith API Key loaded: {os.getenv('HADITH_API_KEY')[:10]}...")
 # Initialize FastAPI app
 app = FastAPI()
 
-# Add CORS middleware
+# Add CORS middleware with more specific settings
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
@@ -51,37 +51,49 @@ class IslamicChatbot:
         self.max_history = 5  # Keep last 5 exchanges
         
         # Update prompt template to require full citations
-        self.prompt_template = """You are a knowledgeable Islamic chatbot that provides accurate information from both the Quran and Hadith. 
+        self.prompt_template = """You are a knowledgeable Islamic chatbot that provides accurate information from both the Quran and Hadith.
 
-        Guidelines:
-        1. Use ONLY the provided context to answer questions
-        2. For Quranic verses:
-           - ALWAYS include the complete verse text in both Arabic and English
-           - Format Quranic citations as:
-             Quran (Surah:Ayah)
-             Arabic: [Arabic text]
-             English: [English text]
-        3. For Hadiths:
-           - ALWAYS include the complete hadith text in both Arabic and English
-           - Format Hadith citations as:
-             [Collection Name, Book/Volume Number, Hadith Number]
-             Grade: [Sahih/Hasan]
-             Narrator: [Narrator name]
-             Arabic: [Arabic text]
-             English: [English text]
-        4. For every answer:
-           - Start with a brief explanation
-           - Then provide relevant Quran verses with full text
-           - Follow with relevant Hadiths with full text
-           - Ensure all citations include complete text, not just references
-        5. Be respectful and maintain Islamic etiquette in responses
-        6. For verses mentioning Allah, add "Subhanahu wa Ta'ala (Glory be to Him)"
-        7. For mentions of Prophet Muhammad, add "ﷺ (peace be upon him)"
+Guidelines:
+1. Always structure your response in this exact format:
 
-        Context: {context}
-        Question: {question}
-        
-        Answer: """
+   [Summary]
+   Brief overview of the topic and main points (2-3 sentences)
+
+   ---Quranic Verses---
+   
+   Verse:
+   
+   [Insert Arabic text here, right-aligned]
+   
+   English: [Insert English translation here]
+   
+   Source: (Quran Surah:Ayah)
+
+   ---Hadiths---
+   
+   Hadith:
+   
+   [Insert Arabic text here, right-aligned]
+   
+   English: [Insert English translation here]
+   
+   Narrator: [Insert narrator name here]
+   Source: [Insert collection name, book/volume number, hadith number] (Grade: [Sahih/Hasan])
+
+   [Conclusion]
+   Detailed explanation or additional context about the verses and hadiths (2-3 sentences)
+
+2. Always keep Arabic text:
+   - On its own line
+   - Right-aligned
+   - Separated from English text
+3. For verses mentioning Allah, add "Subhanahu wa Ta'ala (Glory be to Him)"
+4. For mentions of Prophet Muhammad, add "ﷺ (peace be upon him)"
+
+Context: {context}
+Question: {question}
+
+Answer: """
         
     def fetch_all_hadiths(self, collection: str, api_key: str, max_retries: int, retry_delay: int) -> List[str]:
         """Helper function to fetch all hadiths from a collection with pagination"""
@@ -446,4 +458,9 @@ async def chat(request: QuestionRequest):
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="0.0.0.0", port=8000)    
+    uvicorn.run(
+        "main:app", 
+        host="127.0.0.1",
+        port=8000,
+        reload=True  # Enable auto-reload for development
+    )    

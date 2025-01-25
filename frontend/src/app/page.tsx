@@ -30,7 +30,7 @@ export default function Home() {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ question }),
+        body: JSON.stringify({ question: message }),
       });
 
       if (!response.ok) {
@@ -41,44 +41,20 @@ export default function Home() {
       const botMessage: Message = {
         id: (Date.now() + 1).toString(),
         text: data.answer,
-        isBot: true,
-        references: data.references,
+        isBot: true
       };
 
       setMessages(prev => [...prev, botMessage]);
-      setAnswer(data.answer);
     } catch (error) {
       console.error('Error:', error);
-      setAnswer('Sorry, something went wrong. Please try again.');
+      const errorMessage: Message = {
+        id: (Date.now() + 1).toString(),
+        text: 'Sorry, something went wrong. Please try again.',
+        isBot: true
+      };
+      setMessages(prev => [...prev, errorMessage]);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setLoading(true);
-
-    try {
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ question }),
-      });
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch response');
-      }
-
-      const data = await response.json();
-      setAnswer(data.answer);
-    } catch (error) {
-      console.error('Error:', error);
-      setAnswer('Sorry, something went wrong. Please try again.');
-    } finally {
-      setLoading(false);
     }
   };
 
@@ -110,34 +86,15 @@ export default function Home() {
               key={message.id}
               message={message.text}
               isBot={message.isBot}
-              references={message.references}
             />
           ))}
         </div>
         <div className="fixed bottom-0 left-0 right-0 bg-white border-t">
-          <form onSubmit={handleSubmit} className="flex items-center p-4">
-            <input
-              type="text"
-              value={question}
-              onChange={(e) => setQuestion(e.target.value)}
-              placeholder="Ask a question..."
-              className="w-full p-2 border rounded mr-4"
-            />
-            <button
-              type="submit"
-              disabled={loading}
-              className="bg-blue-500 text-white px-4 py-2 rounded"
-            >
-              {loading ? 'Loading...' : 'Ask'}
-            </button>
-          </form>
+          <ChatInput 
+            onSendMessage={handleSendMessage} 
+            isLoading={isLoading} 
+          />
         </div>
-        {answer && (
-          <div className="bg-gray-100 p-4 rounded-t">
-            <h2 className="font-bold mb-2">Answer:</h2>
-            <p className="whitespace-pre-wrap">{answer}</p>
-          </div>
-        )}
       </div>
     </main>
   );

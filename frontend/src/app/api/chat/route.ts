@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 
-const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000';
+const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://127.0.0.1:8000';
 
 export async function POST(req: Request) {
   try {
@@ -24,10 +24,10 @@ export async function POST(req: Request) {
 
     const data = await response.json();
     return NextResponse.json(data);
-  } catch (error) {
+  } catch (error: any) {
     console.error('Detailed error:', error);  // Debug log
     return NextResponse.json(
-      { error: 'Failed to process request: ' + error.message },
+      { error: 'Failed to process request: ' + (error.message || 'Unknown error') },
       { status: 500 }
     );
   }

@@ -9,7 +9,7 @@ export interface Message {
   id: string;
   text: string;
   isBot: boolean;
-  references?: Reference[];
+  references?: string[];
 }
 
 export interface ChatInputProps {
