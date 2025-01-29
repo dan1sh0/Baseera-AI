@@ -1,98 +1,141 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useEffect, useState } from 'react';
+import { Card } from "@/components/ui/card";
+import { CalendarDays } from "lucide-react";
 
-const hijriMonths = [
-  "Muharram", "Safar", "Rabi' al-Awwal", "Rabi' al-Thani",
-  "Jumada al-Ula", "Jumada al-Thani", "Rajab", "Sha'ban",
-  "Ramadan", "Shawwal", "Dhu al-Qi'dah", "Dhu al-Hijjah"
+interface IslamicDateInfo {
+  day: number;
+  month: string;
+  year: number;
+  gregorianDate: string;
+  hijriMonth: number;
+}
+
+const ISLAMIC_MONTHS = [
+  'Muharram', 'Safar', 'Rabi al-Awwal', 'Rabi al-Thani',
+  'Jumada al-Awwal', 'Jumada al-Thani', 'Rajab', 'Sha\'ban',
+  'Ramadan', 'Shawwal', 'Dhu al-Qi\'dah', 'Dhu al-Hijjah'
 ];
 
-// Islamic historical events
-const historicalEvents: Record<string, string> = {
-  "1 Muharram": "Islamic New Year",
-  "10 Muharram": "Day of Ashura",
-  "12 Rabi' al-Awwal": "Birth of Prophet Muhammad ﷺ",
-  "27 Rajab": "Night Journey (Al-Isra' wal-Mi'raj)",
-  "1 Ramadan": "Beginning of the Month of Fasting",
-  "27 Ramadan": "Laylat al-Qadr (Night of Power)",
-  "1 Shawwal": "Eid al-Fitr",
-  "9 Dhu al-Hijjah": "Day of Arafah",
-  "10 Dhu al-Hijjah": "Eid al-Adha",
-  "22 Rajab": "Victory of Khaybar (7 AH)"
+// Islamic historical events with descriptions
+const historicalEvents: Record<string, { title: string; description: string }> = {
+  "1 Muharram": {
+    title: "Islamic New Year",
+    description: "The beginning of the Islamic calendar, marking the Hijra of Prophet Muhammad ﷺ"
+  },
+  "10 Muharram": {
+    title: "Day of Ashura",
+    description: "A blessed day when Allah saved Prophet Musa (AS) and his followers"
+  },
+  "12 Rabi al-Awwal": {
+    title: "Birth of Prophet Muhammad ﷺ",
+    description: "The blessed day when our beloved Prophet ﷺ was born"
+  },
+  "27 Rajab": {
+    title: "Night Journey",
+    description: "Al-Isra' wal-Mi'raj - The miraculous night journey of Prophet Muhammad ﷺ"
+  },
+  "1 Ramadan": {
+    title: "Beginning of Ramadan",
+    description: "The start of the blessed month of fasting and increased worship"
+  },
+  "27 Ramadan": {
+    title: "Laylat al-Qadr",
+    description: "The Night of Power, better than a thousand months"
+  }
 };
 
-// Simple Hijri date calculation
-const getHijriDate = () => {
-  // Known date pairs (Gregorian to Hijri)
-  const knownGregorian = new Date(2024, 1, 3); // February 3, 2024
-  const knownHijriDay = 22; // Known accurate date: 22 Rajab 1445
-  const knownHijriMonth = 6; // Rajab is the 7th month (index 6)
-  const knownHijriYear = 1445;
-
-  const today = new Date();
-  const diffDays = Math.floor(
-    (today.getTime() - knownGregorian.getTime()) / (1000 * 60 * 60 * 24)
-  );
-
-  // Calculate current Hijri date
-  let hijriDay = knownHijriDay + diffDays;
-  let hijriMonth = knownHijriMonth;
-  let hijriYear = knownHijriYear;
-
-  // Adjust for month transitions (approximate)
-  const daysInMonth = [30, 29, 30, 29, 30, 29, 30, 29, 30, 29, 30, 29]; // Islamic months alternate between 30 and 29 days
-
-  while (hijriDay > daysInMonth[hijriMonth]) {
-    hijriDay -= daysInMonth[hijriMonth];
-    hijriMonth++;
-    if (hijriMonth > 11) {
-      hijriMonth = 0;
-      hijriYear++;
-    }
-  }
-  while (hijriDay < 1) {
-    hijriMonth--;
-    if (hijriMonth < 0) {
-      hijriMonth = 11;
-      hijriYear--;
-    }
-    hijriDay += daysInMonth[hijriMonth];
-  }
-
-  return {
-    day: hijriDay,
-    month: hijriMonths[hijriMonth],
-    year: hijriYear
-  };
-};
-
-export const IslamicDate = () => {
-  const [date, setDate] = useState<string>('');
-  const [event, setEvent] = useState<string>('');
+export function IslamicDate() {
+  const [date, setDate] = useState<IslamicDateInfo | null>(null);
+  const [event, setEvent] = useState<{ title: string; description: string } | null>(null);
+  const [isHovered, setIsHovered] = useState(false);
 
   useEffect(() => {
-    const hijri = getHijriDate();
-    setDate(`${hijri.day} ${hijri.month} ${hijri.year} AH`);
+    const getIslamicDate = () => {
+      try {
+        const today = new Date();
+        const islamicDate = new Intl.DateTimeFormat('en-u-ca-islamic', {
+          day: 'numeric',
+          month: 'long',
+          year: 'numeric'
+        }).format(today);
 
-    // Check for historical events
-    const dateKey = `${hijri.day} ${hijri.month}`;
-    const todayEvent = historicalEvents[dateKey];
-    if (todayEvent) {
-      setEvent(todayEvent);
-    }
+        const gregorianDate = today.toLocaleDateString('en-US', {
+          weekday: 'long',
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        });
+
+        // Parse the formatted date
+        const [month, day, year] = islamicDate.split(' ');
+        const monthIndex = ISLAMIC_MONTHS.findIndex(m => m.toLowerCase() === month.toLowerCase());
+
+        setDate({
+          day: parseInt(day.replace(',', '')),
+          month: month,
+          year: parseInt(year),
+          gregorianDate,
+          hijriMonth: monthIndex + 1
+        });
+
+        // Check for historical events
+        const dateKey = `${parseInt(day)} ${month}`;
+        const todayEvent = historicalEvents[dateKey];
+        if (todayEvent) {
+          setEvent(todayEvent);
+        }
+      } catch (error) {
+        console.error('Error getting Islamic date:', error);
+      }
+    };
+
+    getIslamicDate();
   }, []);
 
+  if (!date) return null;
+
   return (
-    <div className="text-center mb-6">
-      <div className="inline-block bg-green-100 rounded-full px-4 py-1 mb-2">
-        <p className="text-sm text-green-800 font-medium">{date}</p>
-      </div>
-      {event && (
-        <div className="text-xs text-gray-600 mt-1">
-          On this day: {event}
-        </div>
+    <div className="relative">
+      <button
+        className="flex items-center gap-2 px-3 py-1.5 rounded-full hover:bg-accent transition-colors"
+        onMouseEnter={() => setIsHovered(true)}
+        onMouseLeave={() => setIsHovered(false)}
+      >
+        <CalendarDays className="h-4 w-4 text-primary" />
+        <time dateTime={`${date.year}-${date.month}-${date.day}`} className="flex items-center gap-1">
+          <span className="font-arabic">{date.day}</span>
+          <span>{ISLAMIC_MONTHS[date.hijriMonth - 1]}</span>
+          <span className="font-arabic">{date.year} AH</span>
+        </time>
+      </button>
+
+      {/* Hover Card */}
+      {isHovered && (
+        <Card className="absolute top-full mt-2 left-0 w-80 p-4 z-50 shadow-lg animate-in fade-in-0 zoom-in-95">
+          <div className="space-y-3">
+            <div className="space-y-1">
+              <h3 className="font-medium">Islamic Date</h3>
+              <p className="text-sm text-muted-foreground">
+                {date.day} {date.month} {date.year} AH
+              </p>
+            </div>
+            
+            <div className="space-y-1">
+              <h3 className="font-medium">Gregorian Date</h3>
+              <p className="text-sm text-muted-foreground">{date.gregorianDate}</p>
+            </div>
+
+            {event && (
+              <div className="space-y-1 border-t pt-3">
+                <h3 className="font-medium text-primary">{event.title}</h3>
+                <p className="text-sm text-muted-foreground">{event.description}</p>
+              </div>
+            )}
+          </div>
+        </Card>
       )}
     </div>
   );
-}; 
+} 
