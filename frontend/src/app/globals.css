@@ -1,3 +1,10 @@
+@import url('https://fonts.googleapis.com/css2?family=Amiri&display=swap');
+
 @tailwind base;
 @tailwind components;
-@tailwind utilities; 
+@tailwind utilities;
+
+.font-arabic {
+    font-family: 'Amiri', serif;
+    line-height: 1.8;
+}

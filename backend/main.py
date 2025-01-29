@@ -1,9 +1,13 @@
 import os
+
+os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
 from typing import List, Dict, Optional
 from langchain_community.embeddings import OpenAIEmbeddings
-from langchain_community.vectorstores import Chroma
+from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain_openai import ChatOpenAI
+from langchain.chat_models.base import BaseChatModel
+from langchain_huggingface import HuggingFaceEmbeddings
 from langchain.chains import RetrievalQA
 from langchain.prompts import PromptTemplate
 import json
@@ -14,15 +18,36 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 import uvicorn
+from openai import OpenAI
+from langchain_openai.chat_models.base import BaseChatOpenAI
+from contextlib import asynccontextmanager
+import openai
 
 # Load environment variables
 load_dotenv()
 
-print(f"OpenAI API Key loaded: {os.getenv('OPENAI_API_KEY')[:10]}...")  # Only print first 10 chars for security
-print(f"Hadith API Key loaded: {os.getenv('HADITH_API_KEY')[:10]}...")
+# Print API key status (safely)
+deepseek_key = os.getenv('DEEPSEEK_API_KEY')
+hadith_key = os.getenv('HADITH_API_KEY')
+
+print(f"Deepseek API Key loaded: {'✓' if deepseek_key else '✗'}")
+print(f"Hadith API Key loaded: {'✓' if hadith_key else '✗'}")
 
 # Initialize FastAPI app
-app = FastAPI()
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup
+    try:
+        chatbot.load_data()
+        chatbot.setup_qa_chain()
+        print("Islamic chatbot initialized successfully!")
+    except Exception as e:
+        print(f"Error initializing chatbot: {str(e)}")
+    yield
+    # Shutdown
+    pass
+
+app = FastAPI(lifespan=lifespan)
 
 # Add CORS middleware with more specific settings
 app.add_middleware(
@@ -33,9 +58,45 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# At the start of the file, after imports
+if not os.path.exists("./data"):
+    os.makedirs("./data")
+
+class DeepseekChat(BaseChatModel):
+    def __init__(self, api_key: str):
+        super().__init__()
+        self.client = OpenAI(
+            api_key=api_key,
+            base_url="https://api.deepseek.com"
+        )
+
+    def _generate(self, messages, stop=None):
+        response = self.client.chat.completions.create(
+            model="deepseek-reasoner",
+            messages=[{"role": m.type, "content": m.content} for m in messages],
+            temperature=0.2,
+            max_tokens=2048,
+            stream=False
+        )
+        return response.choices[0].message.content
+
 class IslamicChatbot:
     def __init__(self):
-        self.embeddings = OpenAIEmbeddings()
+        # Initialize Deepseek model using BaseChatOpenAI
+        self.llm = BaseChatOpenAI(
+            model='deepseek-reasoner',
+            openai_api_key=os.getenv('DEEPSEEK_API_KEY'),
+            openai_api_base='https://api.deepseek.com',
+            temperature=0.2,
+            max_tokens=2048
+        )
+        
+        # Use all-MiniLM-L6-v2 which matches OpenAI's dimensions
+        self.embeddings = HuggingFaceEmbeddings(
+            model_name="all-MiniLM-L6-v2",
+            model_kwargs={'device': 'cpu'}
+        )
+        
         self.vector_store = None
         self.qa_chain = None
         
@@ -188,12 +249,21 @@ Answer: """
                     return documents
 
     def load_data(self) -> None:
-        """Load and process both Quran and Hadith data from APIs"""
-        documents = []
-        max_retries = 3
-        retry_delay = 2
-        
         try:
+            # Check if vector store exists
+            if os.path.exists("./data/chroma_db"):
+                print("Loading existing vector store...")
+                self.vector_store = Chroma(
+                    persist_directory="./data/chroma_db",
+                    embedding_function=self.embeddings
+                )
+                return
+            
+            print("Creating new vector store...")
+            documents = []
+            max_retries = 3
+            retry_delay = 2
+            
             # 1. Fetch Quran data (keeping existing code)
             print("\nFetching Quran data...")
             total_surahs = 114
@@ -360,7 +430,12 @@ Answer: """
                 raise
             
         except Exception as e:
-            print(f"Error processing data: {str(e)}")
+            print(f"Error in load_data: {str(e)}")
+            # If there's an error, try to recreate the vector store
+            if os.path.exists("./data/chroma_db"):
+                print("Removing existing vector store...")
+                import shutil
+                shutil.rmtree("./data/chroma_db")
             raise
 
     def setup_qa_chain(self) -> None:
@@ -370,15 +445,9 @@ Answer: """
             input_variables=["context", "question"]
         )
         
-        # Initialize ChatOpenAI with GPT-3.5-turbo
-        llm = ChatOpenAI(
-            temperature=0.2,
-            model_name="gpt-3.5-turbo"
-        )
-        
-        # Create the QA chain with simplified configuration
+        # Create the QA chain with Deepseek model
         self.qa_chain = RetrievalQA.from_chain_type(
-            llm=llm,
+            llm=self.llm,
             chain_type="stuff",
             retriever=self.vector_store.as_retriever(
                 search_kwargs={"k": 10}
@@ -404,27 +473,67 @@ Answer: """
                     "status": "error"
                 }
             
-            # Run the query with simplified input format
-            response = self.qa_chain.invoke({
-                "query": question
-            })
+            print("Sending question to QA chain...")
             
-            # Extract the answer from the response
-            answer = response['result'] if isinstance(response, dict) else str(response)
-            
-            # Basic response validation
-            if not answer or len(answer.strip()) < 10:
+            try:
+                # Run the query
+                response = None  # Initialize response variable
+                try:
+                    response = self.qa_chain.invoke({"query": question})
+                    print("Raw QA chain response:", response)
+                except openai.AuthenticationError as auth_err:
+                    print(f"Authentication error with Deepseek API: {str(auth_err)}")
+                    return {
+                        "error": "API authentication failed. Please check your API key.",
+                        "status": "error"
+                    }
+                
+                if not response:
+                    return {
+                        "error": "Failed to get response from QA chain",
+                        "status": "error"
+                    }
+                
+                # Handle different response types
+                if isinstance(response, dict):
+                    if 'result' in response:
+                        answer = response['result']
+                    elif 'answer' in response:
+                        answer = response['answer']
+                    else:
+                        answer = str(response)
+                else:
+                    answer = str(response)
+                
+                print("Processed answer:", answer)
+                
+                # Basic response validation
+                if not answer or len(answer.strip()) < 10:
+                    return {
+                        "error": "Generated response was invalid or too short.",
+                        "status": "error"
+                    }
+                
                 return {
-                    "error": "Generated response was invalid or too short.",
+                    "answer": answer,
+                    "status": "success"
+                }
+                
+            except Exception as e:
+                print(f"Error processing QA chain response: {str(e)}")
+                if response:  # Only try to print response info if it exists
+                    print(f"Response type: {type(response)}")
+                    print(f"Response content: {response}")
+                return {
+                    "error": f"Failed to process response: {str(e)}",
                     "status": "error"
                 }
-            
-            return {
-                "answer": answer,
-                "status": "success"
-            }
-            
+                
         except Exception as e:
+            print(f"Error in answer_question: {str(e)}")
+            print(f"Error type: {type(e)}")
+            import traceback
+            print(f"Traceback: {traceback.format_exc()}")
             return {
                 "error": f"An error occurred: {str(e)}",
                 "status": "error"
@@ -433,34 +542,48 @@ Answer: """
 # Initialize chatbot
 chatbot = IslamicChatbot()
 
-# Load data and setup chain on startup
-@app.on_event("startup")
-async def startup_event():
-    try:
-        chatbot.load_data()
-        chatbot.setup_qa_chain()
-        print("Islamic chatbot initialized successfully!")
-    except Exception as e:
-        print(f"Error initializing chatbot: {str(e)}")
-
 class QuestionRequest(BaseModel):
     question: str
 
 @app.post("/api/chat")
 async def chat(request: QuestionRequest):
     try:
+        print(f"Received question: {request.question}")
+        
         response = chatbot.answer_question(request.question)
+        print(f"Response status: {response.get('status')}")
+        
         if response.get("status") == "success":
             return {"answer": response["answer"]}
         else:
-            raise HTTPException(status_code=400, detail=response.get("error"))
+            error_msg = response.get("error", "Unknown error occurred")
+            print(f"Error in response: {error_msg}")
+            raise HTTPException(status_code=400, detail=error_msg)
+            
+    except HTTPException as he:
+        raise he  # Re-raise HTTP exceptions
+    except Exception as e:
+        print(f"Unexpected error: {str(e)}")
+        print(f"Error type: {type(e)}")
+        import traceback
+        print(f"Traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+# Add new endpoint for daily reminders
+@app.get("/api/daily-reminder")
+async def get_daily_reminder():
+    try:
+        # Get random reminder from our vector store
+        reminder = chatbot.get_random_reminder()
+        return reminder
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
     uvicorn.run(
-        "main:app", 
+        "main:app",
         host="127.0.0.1",
         port=8000,
-        reload=True  # Enable auto-reload for development
+        reload=True,
+        workers=1  # Explicitly set to 1 worker
     )    

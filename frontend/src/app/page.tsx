@@ -4,7 +4,8 @@ import { useState } from 'react';
 import { ChatInput } from '../components/chat/ChatInput';
 import { ChatMessage } from '../components/chat/ChatMessage';
 import { Message } from '../types';
-import { DailyReminder } from '../components/DailyReminder';
+import DailyReminder from '../components/DailyReminder';
+import Link from 'next/link';
 
 export default function Home() {
   const [messages, setMessages] = useState<Message[]>([]);
@@ -95,6 +96,15 @@ export default function Home() {
             isLoading={isLoading} 
           />
         </div>
+        <Link 
+          href="/bookmarks"
+          className="text-green-600 hover:text-green-700 flex items-center gap-2"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-5 h-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M17.593 3.322c1.1.128 1.907 1.077 1.907 2.185V21L12 17.25 4.5 21V5.507c0-1.108.806-2.057 1.907-2.185a48.507 48.507 0 0111.186 0z" />
+          </svg>
+          Bookmarks
+        </Link>
       </div>
     </main>
   );
