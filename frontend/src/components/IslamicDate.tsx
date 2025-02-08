@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { Card } from "@/components/ui/card";
-import { CalendarDays } from "lucide-react";
+import { CalendarDays, Calendar } from "lucide-react";
 
 interface IslamicDateInfo {
   day: number;
@@ -103,7 +103,7 @@ export function IslamicDate() {
         onMouseEnter={() => setIsHovered(true)}
         onMouseLeave={() => setIsHovered(false)}
       >
-        <CalendarDays className="h-4 w-4 text-primary" />
+        <Calendar className="h-4 w-4 text-primary" />
         <time dateTime={`${date.year}-${date.month}-${date.day}`} className="flex items-center gap-1">
           <span className="font-arabic">{date.day}</span>
           <span>{ISLAMIC_MONTHS[date.hijriMonth - 1]}</span>

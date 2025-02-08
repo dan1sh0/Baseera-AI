@@ -26,4 +26,13 @@ export interface User {
   name?: string
   email?: string
   image?: string
+}
+
+export interface SearchResult {
+  id: number
+  surah_number: number
+  verse_number: number
+  arabic: string
+  english: string
+  surah_name: string
 } 

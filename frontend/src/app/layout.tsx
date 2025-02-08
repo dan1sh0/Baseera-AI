@@ -1,5 +1,5 @@
 import type { Metadata } from 'next'
-import { Inter, Amiri } from 'next/font/google'
+import { Inter } from 'next/font/google'
 import { Navbar } from "@/components/navbar"
 import './globals.css'
 
@@ -9,16 +9,9 @@ const inter = Inter({
   variable: '--font-inter',
 })
 
-// Load Amiri font for Arabic text
-const amiri = Amiri({ 
-  subsets: ['arabic'],
-  weight: '400',
-  variable: '--font-amiri',
-})
-
 export const metadata: Metadata = {
-  title: 'Sheikh AI - Islamic Knowledge Assistant',
-  description: 'Get authentic answers about Islam from Quran and Hadith',
+  title: 'Baseera AI',
+  description: 'Islamic Text Search powered by AI',
 }
 
 export default function RootLayout({
@@ -27,7 +20,7 @@ export default function RootLayout({
   children: React.ReactNode
 }) {
   return (
-    <html lang="en" className={`${inter.variable} ${amiri.variable}`}>
+    <html lang="en" className={inter.className}>
       <body>
         <Navbar />
         {children}

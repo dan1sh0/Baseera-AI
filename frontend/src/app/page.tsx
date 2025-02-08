@@ -1,11 +1,12 @@
 "use client"
 
+import { Navbar } from "@/components/navbar"
 import { SearchInterface } from "@/components/search-interface"
 
 export default function Home() {
   return (
-    <div className="container max-w-5xl mx-auto px-4 py-8">
+    <main>
       <SearchInterface />
-    </div>
+    </main>
   )
 } 
